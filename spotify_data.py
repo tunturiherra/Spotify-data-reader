@@ -34,4 +34,4 @@ with open(filepath, 'r', encoding='utf-8') as file:
             found_songs = True
 
     if not found_songs:
-        print(f"Ei löytynyt tietoja vuodelta {listen_year}.")
+        print(f"Vuodelta {listen_year} ei löytynyt hakutuloksia.")
