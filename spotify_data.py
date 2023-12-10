@@ -16,7 +16,7 @@ with open(filepath, 'r', encoding='utf-8') as file:
     data = json.load(file)
 
     # kysytään käyttäjältä haluttua vuotta
-    listen_year = int(input("Anna haluttu vuosi:\n"))
+    listen_year = int(input("Anna haluttu vuosi, jonka perusteella haetaan striimatut laulut:\n"))
 
     # jotta ohjelma ei tulostaisi miljoonaa kertaa virheviestiä, otetaan vain toteutuneet arvot.
     found_songs = False
