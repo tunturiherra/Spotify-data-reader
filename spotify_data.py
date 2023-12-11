@@ -1,3 +1,5 @@
+# lataathan songs.json tiedoston, jotta voit testata tiedoston polun kopiointia ja liittämistä ohjelmaan!
+# 
 import json
 import datetime
 
