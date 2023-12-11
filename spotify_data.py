@@ -9,9 +9,10 @@ def get_year(timestamp):
     date_object = datetime.datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%SZ")
     return date_object.year
 
+
 # Jos windowsilla yrittää kopioida tiedoston sijaintia, niin tulee lainausmerkit mukaan.
 # käytetään replacea, jotta käyttäjän ei tarvitse erikseen siivota inputista lainausmerkkejä.
-filepath = input("Anna tiedoston sijainti: \n").replace('"',"")
+filepath = input("Anna tiedoston sijainti: \n").replace('"', "")
 
 # haetaan tiedot json-tiedostosta ja lisätään se omaksi muuttujaksi
 with open(filepath, 'r', encoding='utf-8') as file:
