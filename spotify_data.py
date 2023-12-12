@@ -47,7 +47,8 @@ while True:
             else:
                 print("Näkemiin!")
             break
-
+            
+        # jos käyttäjä ei syötä mitään.
         except ValueError:
             print("Et syöttänyt lukua.\n")
 
