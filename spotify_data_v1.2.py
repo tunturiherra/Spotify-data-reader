@@ -1,7 +1,7 @@
 import json
 import datetime
 import os
-
+import re
 
 # muunnetaan tällä funktiolla Spotifylta tuleva aikaleima helpommin luettavaan muotoon
 def get_year(timestamp):
@@ -25,6 +25,11 @@ def save_results_to_file(content, filename):
 
     print(f"Tulokset on tallennettu tiedostoon: {new_filename}")
 
+def extract_number(filename):
+    """Pura numero tiedostonimestä"""
+    match = re.search(r'(\d+)', filename)
+    return int(match.group(0)) if match else 0
+
 
 while True:
     try:
@@ -34,6 +39,7 @@ while True:
         # Listataan JSON-tiedostot kansiosta
         print("Saatavilla olevat JSON-tiedostot:")
         files = [f for f in os.listdir(folder_path) if f.endswith('.json')]
+        files.sort(key=extract_number)
         for i, file in enumerate(files, 1):
             print(f"{i}. {file}")
 
