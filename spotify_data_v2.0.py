@@ -3,12 +3,19 @@ import datetime
 import os
 import tkinter as tk
 from tkinter import filedialog
+from collections import Counter
 
 
 # Palauttaa vuosiluvun Spotifyn aikaleimasta
 def get_year(timestamp):
     date_object = datetime.datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%SZ")
     return date_object.year
+
+
+# Palauttaa kuukauden Spotifyn aikaleimasta
+def get_month(timestamp):
+    date_object = datetime.datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%SZ")
+    return date_object.month
 
 
 # Näyttää numerovalikon ja palauttaa käyttäjän valinnan
@@ -38,10 +45,12 @@ def save_results_to_file(content, filename):
         new_filename = f"{base_filename}_{counter}{extension}"
         counter += 1
 
-    with open(new_filename, 'w', encoding='utf-8') as f:
-        f.write(content)
-
-    print(f"Tulokset on tallennettu tiedostoon: {new_filename}")
+    try:
+        with open(new_filename, 'w', encoding='utf-8') as f:
+            f.write(content)
+        print(f"Tulokset on tallennettu tiedostoon: {new_filename}")
+    except OSError as e:
+        print(f"Tiedoston tallentaminen epäonnistui: {e}")
 
 
 # Tarkistaa, onko aikaleima oikeassa muodossa
@@ -96,6 +105,8 @@ def is_valid_spotify_json(file_path):
 
     except json.JSONDecodeError as e:
         return False, f"Tiedosto ei ole validi JSON: {e}"
+    except OSError as e:
+        return False, f"Tiedostoa ei voitu avata: {e}"
     except (ValueError, TypeError) as e:
         return False, f"Tiedoston lukeminen epäonnistui: {e}"
 
@@ -143,10 +154,14 @@ def load_spotify_data_from_folder(folder_path):
     return all_data, loaded, skipped
 
 
-# Kysyy tiedostonimen ja avaa kansionvalintaikkunan tallennusta varten
-# Tiedostot tallennetaan .txt -muodossa
+# Kysyy tiedostonimen ja avaa kansionvalintaikkunan tallennusta varten.
+# Tiedostot tallennetaan .txt-muodossa.
 def ask_save(output):
-    file_name = input("Anna tallennettavan tiedoston nimi (ilman tiedostopäätettä):\n").strip()
+    while True:
+        file_name = input("Anna tallennettavan tiedoston nimi (ilman tiedostopäätettä):\n").strip()
+        if file_name:
+            break
+        print("Tiedostonimi ei voi olla tyhjä.")
 
     # Avataan kansionvalintaikkuna tallennuspaikan valintaan
     root = tk.Tk()
@@ -190,6 +205,110 @@ def get_songs(data, listen_year):
             output += f"\n{artist}: {track}, kuunneltu vuonna {year} laitteelta {device}\n"
 
     return found_songs, output
+
+
+# Näyttää ensin valikon datassa esiintyvistä vuosista, sitten kuukausista.
+# Palauttaa (vuosi, kuukausi) tai None jos käyttäjä peruuttaa.
+def select_year_and_month(data):
+    MONTH_NAMES = {
+        1: "Tammikuu", 2: "Helmikuu", 3: "Maaliskuu", 4: "Huhtikuu",
+        5: "Toukokuu", 6: "Kesäkuu", 7: "Heinäkuu", 8: "Elokuu",
+        9: "Syyskuu", 10: "Lokakuu", 11: "Marraskuu", 12: "Joulukuu"
+    }
+
+    # Kerätään kaikki vuosi+kuukausi-yhdistelmät datasta
+    available = sorted(set(
+        (get_year(song["ts"]), get_month(song["ts"]))
+        for song in data
+        if song["master_metadata_track_name"] is not None
+    ))
+
+    years = sorted(set(y for y, m in available))
+    year_options = [str(y) for y in years] + ["Peruuta"]
+    year_choice = show_menu("Valitse vuosi", year_options)
+
+    if year_choice == len(year_options):
+        return None
+
+    selected_year = years[year_choice - 1]
+
+    months = sorted(set(m for y, m in available if y == selected_year))
+    month_options = [MONTH_NAMES[m] for m in months] + ["Peruuta"]
+    month_choice = show_menu(f"Valitse kuukausi ({selected_year})", month_options)
+
+    if month_choice == len(month_options):
+        return None
+
+    selected_month = months[month_choice - 1]
+
+    return selected_year, selected_month
+
+
+# Laskee kuunnelluimmat kappaleet annetulle vuodelle.
+# Palauttaa (output, löydettiinkö tuloksia).
+def get_top_songs_for_year(data, year, limit):
+    # Lasketaan kuuntelumäärät artisti+kappale-yhdistelmittäin
+    play_counts = Counter()
+
+    for song in data:
+        if get_year(song["ts"]) != year:
+            continue
+
+        artist = song["master_metadata_album_artist_name"]
+        track = song["master_metadata_track_name"]
+
+        if artist is None or track is None:
+            continue
+
+        play_counts[(artist, track)] += 1
+
+    if not play_counts:
+        return "", False
+
+    output = f"\nTop {limit} kuunnelluimmat — {year}\n"
+    output += "-" * len(output.strip()) + "\n"
+
+    for i, ((artist, track), count) in enumerate(play_counts.most_common(limit), 1):
+        output += f"  {i}. {artist}: {track} ({count} kertaa)\n"
+
+    return output, True
+
+
+# Laskee kuunnelluimmat kappaleet annetulle vuodelle ja kuukaudelle.
+# Palauttaa (output, löydettiinkö tuloksia).
+def get_top_songs_for_month(data, year, month, limit):
+    MONTH_NAMES = {
+        1: "Tammikuu", 2: "Helmikuu", 3: "Maaliskuu", 4: "Huhtikuu",
+        5: "Toukokuu", 6: "Kesäkuu", 7: "Heinäkuu", 8: "Elokuu",
+        9: "Syyskuu", 10: "Lokakuu", 11: "Marraskuu", 12: "Joulukuu"
+    }
+
+    # Lasketaan kuuntelumäärät artisti+kappale-yhdistelmittäin
+    play_counts = Counter()
+
+    for song in data:
+        if get_year(song["ts"]) != year or get_month(song["ts"]) != month:
+            continue
+
+        artist = song["master_metadata_album_artist_name"]
+        track = song["master_metadata_track_name"]
+
+        if artist is None or track is None:
+            continue
+
+        play_counts[(artist, track)] += 1
+
+    if not play_counts:
+        return "", False
+
+    month_name = MONTH_NAMES[month]
+    output = f"\nTop {limit} kuunnelluimmat — {month_name} {year}\n"
+    output += "-" * len(output.strip()) + "\n"
+
+    for i, ((artist, track), count) in enumerate(play_counts.most_common(limit), 1):
+        output += f"  {i}. {artist}: {track} ({count} kertaa)\n"
+
+    return output, True
 
 
 def main():
@@ -237,41 +356,94 @@ def main():
                 print("Näkemiin!")
                 break
 
-        # Vuosihaku
+        # Hakuvalikko
         else:
-            try:
-                listen_year = int(input("\nAnna haluttu vuosi (0 = kaikki vuodet):\n").strip())
-            except ValueError:
-                print("Et syöttänyt lukua. Yritä uudelleen.")
-                continue
-
-            found_songs, output = get_songs(data, listen_year)
-
-            if not found_songs:
-                year_text = "kaikilta vuosilta" if listen_year == 0 else f"vuodelta {listen_year}"
-                print(f"Hakutuloksia ei löytynyt {year_text}.")
-            else:
-                print(output)
-
-            # Hakutulosvalikko
-            choice = show_menu("Mitä seuraavaksi?", [
-                "Hae uudella vuodella",
-                "Tallenna tulokset tiedostoon",
+            choice = show_menu("Mitä haetaan?", [
+                "Hae vuoden mukaan",
+                "Vuoden kuunnelluimmat",
+                "Kuukauden kuunnelluimmat",
                 "Vaihda kansiota",
                 "Lopeta"
             ])
 
             if choice == 1:
-                continue
-            elif choice == 2:
-                if found_songs:
-                    ask_save(output)
+                # Vuosihaku
+                try:
+                    listen_year = int(input("\nAnna haluttu vuosi (0 = kaikki vuodet):\n").strip())
+                except ValueError:
+                    print("Et syöttänyt lukua. Yritä uudelleen.")
+                    continue
+
+                found_songs, output = get_songs(data, listen_year)
+
+                if not found_songs:
+                    year_text = "kaikilta vuosilta" if listen_year == 0 else f"vuodelta {listen_year}"
+                    print(f"Hakutuloksia ei löytynyt {year_text}.")
                 else:
-                    print("Ei tallennettavia tuloksia.")
+                    print(output)
+                    if show_menu("Tallennetaanko tulokset?", ["Tallenna", "Ohita"]) == 1:
+                        ask_save(output)
+
+            elif choice == 2:
+                # Vuoden kuunnelluimmat
+                years = sorted(set(get_year(song["ts"]) for song in data if song["master_metadata_track_name"] is not None))
+                year_options = [str(y) for y in years] + ["Peruuta"]
+                year_choice = show_menu("Valitse vuosi", year_options)
+
+                if year_choice == len(year_options):
+                    continue
+
+                selected_year = years[year_choice - 1]
+
+                while True:
+                    try:
+                        limit = int(input("\nKuinka monta kappaletta listataan?\n").strip())
+                        if limit > 0:
+                            break
+                        print("Syötä positiivinen luku.")
+                    except ValueError:
+                        print("Et syöttänyt lukua. Yritä uudelleen.")
+
+                output, found = get_top_songs_for_year(data, selected_year, limit)
+
+                if not found:
+                    print("Ei hakutuloksia valitulle vuodelle.")
+                else:
+                    print(output)
+                    if show_menu("Tallennetaanko tulokset?", ["Tallenna", "Ohita"]) == 1:
+                        ask_save(output)
+
             elif choice == 3:
+                # Kuukauden kuunnelluimmat
+                result = select_year_and_month(data)
+                if result is None:
+                    continue
+
+                year, month = result
+
+                while True:
+                    try:
+                        limit = int(input("\nKuinka monta kappaletta listataan?\n").strip())
+                        if limit > 0:
+                            break
+                        print("Syötä positiivinen luku.")
+                    except ValueError:
+                        print("Et syöttänyt lukua. Yritä uudelleen.")
+
+                output, found = get_top_songs_for_month(data, year, month, limit)
+
+                if not found:
+                    print("Ei hakutuloksia valitulle kuukaudelle.")
+                else:
+                    print(output)
+                    if show_menu("Tallennetaanko tulokset?", ["Tallenna", "Ohita"]) == 1:
+                        ask_save(output)
+
+            elif choice == 4:
                 data = []
                 continue
-            elif choice == 4:
+
+            elif choice == 5:
                 print("Näkemiin!")
                 break
 
